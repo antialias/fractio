@@ -2,13 +2,24 @@ var processing_render_queue = false;
 var express = require('express')
   , app = express.createServer()
   , io = require('socket.io').listen(app)
-  , fs = require('fs')
+  , fs = require('fs');
 
-app.use(express.static(__dirname + "/public"));
+app.set("view options", {layout: false});
+app.register('.html', {
+	compile: function(str, options){
+		return function(locals){
+		return str;
+	};}
+});
+
+app.get("/master/", function (req,res) {
+	res.render(__dirname + "/public/index.html");
+});
 
 app.get("/worker/:for_session",function(req,res) {
-	res.send("hello world " + req.params.for_session);
+	res.render(__dirname + "/public/worker.html");
 });
+app.use(express.static(__dirname + "/public"));
 // app.get("/",function(req,res) {
 // 	fs.readFile(__dirname + '/master.html',
 // 	function (err, data) {
@@ -147,4 +158,4 @@ var process_render_queue = function(cur) {
 		setTimeout(function() {var _cur = cur; process_render_queue(_cur);},1000);
 	}
 }
-app.listen(80);
+app.listen(30682);

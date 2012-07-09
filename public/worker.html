@@ -6,7 +6,7 @@
 var sessionid = null;
 var my_session_id;
 function start() {
-    var socket = io.connect('http://localhost');
+    var socket = io.connect(document.location.origin);
     socket.on('session_id', function(session_id) {
         my_session_id = session_id;
         console.log("session id = " + session_id);
