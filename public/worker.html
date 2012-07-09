@@ -1,161 +1,23 @@
 <html>
 <body onload='start()'>
 <script src="/socket.io/socket.io.js"></script>
+<script src="/fractal_plane.js"></script>
 <script>
 var sessionid = null;
-var fractal_plane = function(config, parent,socket) {
-    console.log(config);
-    var ret = {};
-    var canvas = document.createElement('canvas');
-    canvas.id="fractal";
-    canvas.width = config.size.width;
-    canvas.height = config.size.height;
-    var ctx = canvas.getContext("2d");
-    if (parent) {
-        parent.appendChild(canvas);
-    }
-    var cw = (config.plane.br.r - config.plane.ul.r),
-        ch = (config.plane.br.i - config.plane.ul.i);
-    ret.cp_to_screen = function(cp) {
-        return {
-            x: (cp.r - config.plane.ul.r) * config.size.width / cw,
-            y: (cp.i - config.plane.ul.i) * config.size.height / ch
-        };
-    };
-    ret.screen_to_cp = function(xy) {
-        return {
-            r: (xy.x / config.size.width) * (config.plane.br.r - config.plane.ul.r) + config.plane.ul.r,
-            i: (xy.y / config.size.height) * (config.plane.br.i - config.plane.ul.i) + config.plane.ul.i
-        };
-    };
-    ret.draw = function(resolution, engine) {
-        var x, y;
-        for (x=0; x< config.size.width; x += config.block_size) {
-            for(y=0; y < config.size.height ; y += config.block_size) {
-                engine(config, {x:x,y:y});
-            }
-            // return;
-        }
-    };
-    var requested_delegations = {};
-    if (socket) {
-        socket.on('render-result', function(data) {
-            console.log(data);
-            var block = new Image;
-            block.src=data.result;
-            // document.body.appendChild(block);
-            setTimeout(function() {
-                ctx.drawImage(block, data.xy.x, data.xy.y);
-            },100);
-            console.log("rendered by ");
-            console.log(data.config.session_id);
-        });
-        socket.on('render-request', function(data) {
-            console.log("received render request");
-            var worker_plane = new fractal_plane(data.config);
-            var worker = worker_plane.get_worker();
-            var worker_canvas = document.createElement("canvas");
-            worker(config, data.xy, worker_canvas.getContext("2d"));
-            data.result = worker_canvas.toDataURL();
-            socket.emit('render-result', data);
-        });
-    }
-    ret.get_delegator = function() {
-        return function(config, xy, draw_to) {
-            if (socket) {
-                socket.emit('render', {config: config, xy: xy});
-                requested_delegations["" + xy.x + ":" + xy.y] = true;
-            } else {
-                console.error("can not make a delegator for a worker fractal");
-                return;
-            }
-        }
-    };
-    ret.get_context = function() {
-        return ctx;
-    };
-    ret.get_worker = function() {
-        return function(config, xy, draw_to) {
-            var scratch = document.createElement('canvas');
-            scratch.width = config.block_size;
-            scratch.height = config.block_size;
-            var scratch_ctx = scratch.getContext("2d");
-            var x,y;
-            var noise = Math.random() * 0.75 + 0.75;
-            for (x=xy.x; x < xy.x + config.block_size; x += config.resolution) {
-                for (y=xy.y; y < xy.y + config.block_size; y += config.resolution) {
-                    var cp = ret.screen_to_cp({x:x,y:y});
-                    var max_iter = 100;
-                    mr = mandel(cp, max_iter);
-                    var shade = Math.ceil(noise * 256 * (max_iter - mr) / max_iter);
-                    scratch_ctx.fillStyle = "rgb(" + shade + "," + shade + "," + shade + ")";
-                    scratch_ctx.fillRect(
-                        x - xy.x,
-                        y - xy.y,
-                        x - xy.x + config.resolution,
-                        y - xy.y + config.resolution);
-                }
-            }
-            if (draw_to) {
-                scratch_ctx.fillStyle = "rgb(" + 255 + "," + 255 + "," + 255 + ")";
-                scratch_ctx.font = "20pt arial";
-                scratch_ctx.fillText("" + my_session_id,config.block_size / 2,config.block_size / 2);
-                draw_to.drawImage(scratch, 0, 0, config.block_size,config.block_size);
-            } else {
-                ctx.drawImage(scratch, xy.x, xy.y, config.block_size,config.block_size);
-            }
-        };
-    };
-    return ret;
-};
-
-var mandel = function (cp, max_iter) {
-    var iter = max_iter;
-    var z = {r:0,i:0};
-    var c = {r:cp.r, i:cp.i};
-    while (iter > 0 && (z.r*z.r + z.i*z.i) < 4) {
-        --iter;
-        z = {
-            r:z.r * z.r - z.i * z.i + cp.r,
-            i:2 * z.r * z.i + cp.i
-        };
-        // c.r = z.r;
-        // c.i = z.i;
-    }
-    return (max_iter - iter);
-}
-var canvas2frac = function(cp) {
-    return ri;
-};
 var my_session_id;
 function start() {
     var socket = io.connect('http://localhost');
     socket.on('session_id', function(session_id) {
         my_session_id = session_id;
         console.log("session id = " + session_id);
-        var cp = new fractal_plane({
-            session_id:session_id,
-            block_size:76,
-            resolution:2,
-            size:{
-                width: document.documentElement.clientWidth,
-                height: document.documentElement.clientHeight
-            },
-            plane:{
-                ul:{
-                    r:-2.0,
-                    i:-2.0 * (document.documentElement.clientHeight / document.documentElement.clientWidth)},
-                br:{
-                    r:2.0,
-                    i:2.0 * (document.documentElement.clientHeight / document.documentElement.clientWidth)}}}
-            ,
-            document.body,
-            socket
-        );
-        if (session_id == 0) {
-            cp.draw(10, cp.get_delegator());
-        }
-        // cp.draw(10, cp.get_worker());
+    });
+    socket.on('render-request', function(data) {
+        console.log("received render request from " + data.config.session_id);
+        var worker_canvas = document.createElement("canvas");
+        (new fractal_plane(data.config)).get_worker()(data.xy, worker_canvas.getContext("2d"));
+        data.result = worker_canvas.toDataURL();
+        data.rendered_by = my_session_id;
+        socket.emit('render-result', data);
     });
 }
 </script>
